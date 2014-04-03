@@ -37,18 +37,25 @@ sub slog { shift->daemon->logger(@_) }
 
 sub _send {
     my ($self, $code, $msg, @args) = @_;
-
-#    unless (scalar @res) {
-#        @res = (ERROR_IN_PROCESSING,
-#            'Requested action aborted: error in processing');
-#    }
-
-    # TODO:
-    #   multiline: <CODE>-<MSG>
-    #   online: <CODE> <MSG>
-
     my $fh = $self->fh;
-    printf $fh "%d $msg\r\n", $code, @args;
+
+    if (ref($msg) eq 'ARRAY') {
+        my $multi_line_msg;
+
+        foreach my $l (@$msg) {
+            my ($m, @args) = @$l;
+            $multi_line_msg .= sprintf "%d-$m\r\n", $code, @args;
+        }
+
+        print $fh $multi_line_msg;
+    }
+    elsif ($code && $msg) {
+        printf $fh "%d $msg\r\n", $code, @args;
+    }
+    else {
+        printf $fh "%d Requested action aborted: error in processing\r\n",
+            ERROR_IN_PROCESSING;
+    }
 }
 
 sub clean {
@@ -63,16 +70,16 @@ sub handle {
 
     my $fh = $self->fh;
 
-    while (1) {
-        #$self->slog();
-        $self->_send(READY, '%s %s', $self->daemon->address, $self->daemon->name);
+    #$self->slog();
+    $self->_send(READY, '%s %s', $self->daemon->address, $self->daemon->name);
 
+    while (1) {
         my $req = $fh->readline(TERMINATOR);
 
         unless (defined $req) {
-            # RETURN ERROR
-            close $fh;
-            die 'UNDEFINED REQ';
+            close $fh; # TODO: handle my be already closed
+            $self->slog(info => 'Connection closed');
+            last;
         }
 
         my ($cmd, $args) = split /\s/, $req, 2;

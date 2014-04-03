@@ -12,8 +12,15 @@ use SMTP::ReplyCodes;
 sub new {
     my ($class, %args) = @_;
     my $self = bless { %args }, $class;
+
+    $self->{extensions} = [
+        SMTP::Extensions::Size->new
+    ];
+
     $self;
 }
+
+sub extensions { shift->{extensions} }
 
 sub session { shift->{session} }
 sub _send { shift->session->_send(@_) }
@@ -47,9 +54,14 @@ sub ehlo {
     # 250-ENHANCEDSTATUSCODES
     # 250 CHUNKING
 
+    my @extensions;
+    foreach my $ext (@{ $self->extensions }) {
+        push @extensions, [$ext->ehlo];
+    }
+
     $self->session->done('HELO');
     $self->_send(
-        OK, 'Privet %s, what you wish?', $domain,
+        OK, [['Privet %s, what you wish?', $domain], @extensions]
     );
 }
 
@@ -57,7 +69,7 @@ sub helo {
     my ($self, $args) = @_;
 
     # "HELO" SP Domain CRLF
-    $args =~ /^HELO \s (\p{Alnum}) \r\n/imsx;
+    $args =~ /^HELO \s (\p{Alnum}+) \r\n/imsx;
 
     unless ($1) {
         $self->_send(ERROR_IN_PARAMETERS, 'ERROR_IN_PARAMETERS');

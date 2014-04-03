@@ -17,6 +17,11 @@ sub size {
     $self->{size} || DEFAULT_SIZE;
 }
 
+sub ehlo {
+    my $self = shift;
+    sprintf 'SIZE %d', $self->size;
+}
+
 1;
 
 __END__
