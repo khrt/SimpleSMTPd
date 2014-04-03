@@ -15,7 +15,7 @@ use SMTP::Commands;
 use SMTP::ReplyCodes;
 use SMTP::Session;
 
-use constant NAME => 'Perl SMTP daemon RFC5321';
+use constant NAME => 'Perl SMTPd RFC5321';
 
 my $MAX_CONNECTS = 100;
 
@@ -40,8 +40,8 @@ sub new {
         else {
             my ($addr, $port) = split ':', $args{listen};
             Coro::Socket->new(
-                ListenAddr => $addr,
-                ListenPort => $port,
+                LocalAddr => $addr,
+                LocalPort => $port,
                 ReuseAddr => 1,
                 Listen => 1,
             );
@@ -62,9 +62,21 @@ sub new {
 
 sub name { shift->{name} || NAME }
 
+sub address {
+    my $self = shift;
+
+    if ($self->{unix}) {
+        return 'SOCKET';
+    }
+    else {
+        return $self->{listen};
+    }
+}
+
 sub logger {
     my ($self, $level, $str, @args) = @_;
     my $msg = sprintf("%s: $str", uc($level), @args);
+    use feature 'say';
     say $msg;
 }
 
@@ -73,13 +85,15 @@ sub run {
 
     async { loop() };
 
-    $self->logger(info => 'Listening on: %s', $self->{listen});
+    $self->logger(info => 'Listening on: %s', $self->address);
     while (1) {
         $self->{connects}->down;
 
         if (my $fh = $self->{daemon}->accept) {
             async_pool {
                 eval { SMTP::Session->new(daemon => $self, fh => $fh)->handle };
+                $self->logger(error => $@) if $@;
+
                 close $fh;
                 $self->{connects}->up;
             }

@@ -8,6 +8,8 @@ use Carp;
 use SMTP::Commands;
 use SMTP::ReplyCodes;
 
+use IO::Socket::INET;
+
 #use constant TERMINATOR => "\015\012";
 #use constant TERMINATOR => "\r\n";
 use constant TERMINATOR => "\n";
@@ -16,6 +18,12 @@ sub new {
     my ($class, %args) = @_;
     my $self = bless { %args }, $class;
 
+    if ($self->{listen}) {
+        my (undef, $iaddr) = unpack_sockaddr_in $self->fh->peername
+            or $self->slog('Unable to get peername.');
+        $self->{remote_address} = inet_ntoa $iaddr;
+    }
+
     $self->{command} = SMTP::Commands->new(session => $self);
     $self;
 }
@@ -23,22 +31,32 @@ sub new {
 sub command { shift->{command} }
 sub daemon { shift->{daemon} }
 sub fh { shift->{fh} }
+sub remote_address { shift->{remote_address} }
+
+sub slog { shift->daemon->logger(@_) }
 
 sub _send {
     my ($self, $code, $msg, @args) = @_;
 
-    $code ||= ERROR_IN_PROCESSING;
-    $msg ||= 'Requested action aborted: error in processing';
+#    unless (scalar @res) {
+#        @res = (ERROR_IN_PROCESSING,
+#            'Requested action aborted: error in processing');
+#    }
+
+    # TODO:
+    #   multiline: <CODE>-<MSG>
+    #   online: <CODE> <MSG>
 
     my $fh = $self->fh;
     printf $fh "%d $msg\r\n", $code, @args;
 }
 
-
 sub clean {
-    my $self = shift;
-    $self->{data} = undef;
+    shift->{data} = undef;
 }
+sub data { shift->{data} }
+
+sub done { shift->{done}{shift} = 1 }
 
 sub handle {
     my $self = shift;
@@ -46,7 +64,8 @@ sub handle {
     my $fh = $self->fh;
 
     while (1) {
-        $self->_send(OK, "%s %s\n", $self->{addr}, $self->daemon->name);
+        #$self->slog();
+        $self->_send(READY, '%s %s', $self->daemon->address, $self->daemon->name);
 
         my $req = $fh->readline(TERMINATOR);
 
@@ -57,9 +76,10 @@ sub handle {
         }
 
         my ($cmd, $args) = split /\s/, $req, 2;
+        $cmd = lc($cmd);
 
         if ($self->{command}->can($cmd)) {
-            $self->{command}->$cmd($args);
+            $self->{command}->$cmd($req);
         }
         else {
             $self->{command}->not_implemented;

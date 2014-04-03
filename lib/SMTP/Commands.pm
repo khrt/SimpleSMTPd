@@ -5,7 +5,7 @@ use warnings;
 
 use SMTP::Extensions::Size;
 #use SMTP::Extensions::8BitMIME;
-#use SMTP::Extensions::EnhancedStatusCodes
+#use SMTP::Extensions::EnhancedStatusCodes;
 #use SMTP::Extensions::Auth::Login
 use SMTP::ReplyCodes;
 
@@ -24,8 +24,17 @@ sub not_implemented {
 }
 
 sub ehlo {
-    my $self = shift;
-    $self->_send(COMMAND_NOT_IMPLEMENTED, 'BYE-BYE');
+    my ($self, $args) = @_;
+
+    # "EHLO" SP ( Domain / address-literal ) CRLF
+    $args =~ /^EHLO \s (.+) \r\n/imsx;
+
+    unless ($1) {
+        $self->_send(ERROR_IN_PARAMETERS, 'ERROR_IN_PARAMETERS');
+        return;
+    }
+
+    my $domain = $1;
 
 #    ( "250-" Domain [ SP ehlo-greet ] CRLF
 #    *( "250-" ehlo-line CRLF )
@@ -37,93 +46,110 @@ sub ehlo {
     # 250-STARTTLS
     # 250-ENHANCEDSTATUSCODES
     # 250 CHUNKING
+
+    $self->session->done('HELO');
+    $self->_send(
+        OK, 'Privet %s, what you wish?', $domain,
+    );
 }
 
 sub helo {
-    my $self = shift;
-    # TODO: name, address
-    $self->_send(OK, '%s %s is ready', 'ADDRESS', 'NAME');
+    my ($self, $args) = @_;
+
+    # "HELO" SP Domain CRLF
+    $args =~ /^HELO \s (\p{Alnum}) \r\n/imsx;
+
+    unless ($1) {
+        $self->_send(ERROR_IN_PARAMETERS, 'ERROR_IN_PARAMETERS');
+        return;
+    }
+
+    my $domain = $1;
+
+    $self->session->done('HELO');
+    $self->_send(OK, 'Privet %s, what you wish?', $domain);
 }
 
 sub mail {
     my ($self, $args) = @_;
 
     # ehlo/helo first
-
-    unless ($args) {
-        $self->_send(ERROR_IN_PARAMETERS, 'TODO:');
-        return;
+    unless (0) {
+        $self->_send(BAD_SEQUENCE_OF_COMMANDS, 'send EHLO/HELO first')
     }
 
     $args =~ m/
         # "MAIL FROM:" Reverse-path
-        ^FROM: <([^>]+)>
+        ^MAIL FROM: <([^>]+)>
         # [SP Mail-parameters] CRLF
-        (.+)?
-    /msx;
+        \s? (.+)? \r\n
+    /imsx;
 
-    my ($from, $params) = ($1, $2);
-
-    unless ($from) {
+    unless ($1) {
+        $self->_send(ERROR_IN_PARAMETERS, 'ERROR_IN_PARAMETERS');
         return;
     }
 
-    $self->session->store(from => $from);
+    my ($from, $params) = ($1, $2);
+
+    $self->session->data->{from} = $from;
     #$self->session->{} = $params;
 
-    $self->_send('%d OK', OK);
+    $self->session->done('MAIL');
+    $self->_send(OK, 'OK');
 }
 
 sub rcpt {
     my ($self, $args) = @_;
 
-    # ehlo/helo
-    # MAIL
+    # needs MAIL
 
     # RCPT TO:<forward-path> [ SP <rcpt-parameters> ] <CRLF>
     my $recipients;
 
-    $self->session->store(recipients => $recipients);
-    $self->_send('%d OK', OK);
+    $self->session->data->{recipients} = $recipients;
+
+    $self->session->done('RCPT');
+    $self->_send(OK, 'OK');
 }
 
 sub data {
     my ($self, $fh, $args) = @_;
 
-    # ehlo/helo
-    # MAIL
-    # RCPT
+    # needs RCPT
 }
 
 sub rset {
     my ($self, $fh, $args) = @_;
 
-   # This command specifies that the current mail transaction will be aborted.
-   #
-   # Any stored sender, recipients, and mail data MUST be discarded,
-   # and all buffers and state tables cleared.
-   #
-   # The receiver MUST send a "250 OK" reply to a RSET command with no arguments.
+    # This command specifies that the current mail transaction will be aborted.
+    #
+    # Any stored sender, recipients, and mail data MUST be discarded,
+    # and all buffers and state tables cleared.
+    #
+    # The receiver MUST send a "250 OK" reply to a RSET command with no arguments.
 
-   $self->session->clean;
-   printf $fh "%d OK\n", OK;
+    $self->session->clean;
+    $self->_send(OK, 'OK');
 }
 
 sub noop {
     my $self = shift;
-    $self->_send('%d OK', OK);
+    $self->_send(OK, 'OK');
 }
 
 sub quit {
     my $self = shift;
-    $self->_send('%d OK', CLOSING_TRANSMISSION);
+    $self->_send(CLOSING_TRANSMISSION, 'Thank you, come again!');
     close $self->session->fh;
 }
 
 sub vrfy {
-    my ($self, $fh, $args) = @_;
-    # vrfy = "VRFY" SP String CRLF
-    $self->_send('%d Don\'t give up!', CANNOT_VRFY_USER);
+    my ($self, $args) = @_;
+
+    # "VRFY" SP String CRLF
+    $args =~ /^VRFY \s (.+) \r\n/imsx;
+    $self->_send(CANNOT_VRFY_USER, 'As you wish!');
 }
 
 1;

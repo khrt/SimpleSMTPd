@@ -7,8 +7,9 @@ use lib qw(../lib lib);
 
 use SMTP;
 
-my $smtp = SMPT->new(
-    listen => '0.0.0.0:9025',
+my $smtp = SMTP->new(
+    listen => '127.0.0.1:9025',
+    #unix => '/tmp/simple-smtpd.sock',
 
     log_level => 'debug',
     #log_file => '',
