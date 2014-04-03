@@ -139,7 +139,8 @@ sub rcpt {
 
     my ($recipients, $params) = ($1, $self->_parse_esmtp_params($2));
 
-    $self->session->data->{recipients} = $recipients;
+    $self->session->store(rcpt => $recipients);
+    $self->session->store(rcpt_parameters => $params);
 
     $self->session->done('RCPT');
     $self->_send(OK, 'OK');
