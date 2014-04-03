@@ -7,21 +7,16 @@ use Carp;
 
 use SMTP::Commands;
 use SMTP::ReplyCodes;
-
 use IO::Socket::INET;
-
-#use constant TERMINATOR => "\015\012";
-#use constant TERMINATOR => "\r\n";
-use constant TERMINATOR => "\n";
 
 sub new {
     my ($class, %args) = @_;
     my $self = bless { %args }, $class;
 
     if ($self->{listen}) {
-        my (undef, $iaddr) = unpack_sockaddr_in $self->fh->peername
+        my (undef, $iaddr) = unpack_sockaddr_in($self->fh->peername)
             or $self->slog('Unable to get peername.');
-        $self->{remote_address} = inet_ntoa $iaddr;
+        $self->{remote_address} = inet_ntoa($iaddr);
     }
 
     $self->{command} = SMTP::Commands->new(session => $self);
@@ -31,7 +26,7 @@ sub new {
 sub command { shift->{command} }
 sub daemon { shift->{daemon} }
 sub fh { shift->{fh} }
-sub remote_address { shift->{remote_address} }
+sub remote_address { shift->{remote_address} || 'UNKNOWN' }
 
 sub slog { shift->daemon->logger(@_) }
 
@@ -58,23 +53,38 @@ sub _send {
     }
 }
 
-sub clean {
-    shift->{data} = undef;
+# Session data
+sub clean { shift->{data} = {} }
+
+sub get {
+    my ($self, $key) = @_;
+
+    if ($key) {
+        $key = lc $key;
+        my $data = $self->{data}{$key};
+        return $self->{data}{$key}[0] if ref($data) && scalar(@$data) == 1;
+        return $self->{data}{$key}
+    }
+
+    $self->{data};
 }
-sub data { shift->{data} }
 
-sub done { shift->{done}{shift} = 1 }
+sub store {
+    my ($self, $key, $value) = @_;
+    push @{ $self->{data}{lc($key)} }, $value;
+}
 
+# Main loop
 sub handle {
     my $self = shift;
 
     my $fh = $self->fh;
 
-    #$self->slog();
+    $self->slog(info => '%s has connected', $self->remote_address);
     $self->_send(READY, '%s %s', $self->daemon->address, $self->daemon->name);
 
     while (1) {
-        my $req = $fh->readline(TERMINATOR);
+        my $req = $fh->readline("\r\n");
 
         unless (defined $req) {
             close $fh; # TODO: handle my be already closed
