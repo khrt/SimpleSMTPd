@@ -53,20 +53,13 @@ sub clean { shift->{data} = {} }
 
 sub get {
     my ($self, $key) = @_;
-
-    if ($key) {
-        $key = lc $key;
-        my $data = $self->{data}{$key};
-        #return $self->{data}{$key}[0] if ref($data) && scalar(@$data) == 1;
-        return $self->{data}{$key};
-    }
-
+    return $self->{data}{$key} if $key;
     $self->{data};
 }
 
 sub store {
     my ($self, $key, $value) = @_;
-    push @{ $self->{data}{lc($key)} }, $value;
+    $self->{data}{$key} = $value;
 }
 
 # Main loop
@@ -94,6 +87,9 @@ sub handle {
         $cmd = lc($cmd);
 
         if ($self->{command}->can($cmd)) {
+            # NOTE:
+            # eval { $cmd }
+            # if $@ -> last;
             $self->{command}->$cmd($req);
         }
         else {

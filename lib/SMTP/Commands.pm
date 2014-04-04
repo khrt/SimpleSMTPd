@@ -72,6 +72,8 @@ sub ehlo {
         return;
     }
 
+    $self->session->clean;
+
     my $domain = $1;
 
     # ( "220-" (Domain / address-literal) [ SP textstring ] CRLF
@@ -110,6 +112,9 @@ sub helo {
 sub mail {
     my ($self, $args) = @_;
 
+# S: 250
+# E: 552, 451, 452, 550, 553, 503, 455, 555
+
     if (!$self->session->get('helo') && !$self->session->get('ehlo')) {
         $self->_send('%d Send EHLO/HELO first', BAD_SEQUENCE_OF_COMMANDS);
         return;
@@ -121,7 +126,7 @@ sub mail {
     $args =~ /^MAIL \s FROM: (<[^>]+>) \s? (.+)? \r\n/imsx;
 
     unless ($1) {
-        $self->_send('%d ERROR_IN_PARAMETERS', ERROR_IN_PARAMETERS);
+        $self->_send('%d ERROR_IN_PARAMETERS', ERROR_IN_PARAMETERS); # INVALID CODE
         return;
     }
 
@@ -143,6 +148,9 @@ sub mail {
 sub rcpt {
     my ($self, $args) = @_;
 
+# S: 250, 251 (but see Section 3.4 for discussion of 251 and 551)
+# E: 550, 551, 552, 553, 450, 451, 452, 503, 455, 555
+
     # needs MAIL
     unless ($self->session->get('mail')) {
         $self->_send('%d Need MAIL command', BAD_SEQUENCE_OF_COMMANDS);
@@ -163,6 +171,7 @@ sub rcpt {
 
     my ($recipients, $params) = ($1, $self->_parse_esmtp_params($2));
 
+    $self->session->get('rcpt');
     $self->session->store(rcpt => [$recipients, $params]);
 
     $self->_send('%d OK', OK);
@@ -170,6 +179,8 @@ sub rcpt {
 
 sub data {
     my ($self, $fh, $args) = @_;
+
+# E: 503, 554
 
     # needs MAIL and RCPT
     unless ($self->session->get('rcpt')) {
@@ -218,15 +229,11 @@ sub noop {
     $self->_send('%d OK', OK);
 }
 
-sub quit {
-    my ($self, $args) = @_;
-    # "QUIT" CRLF
-    $self->_send('%d Thank you, come again!', CLOSING_TRANSMISSION);
-    close $self->session->fh;
-}
-
 sub vrfy {
     my ($self, $args) = @_;
+
+# E: 550, 551, 553, 502, 504
+
     # "VRFY" SP String CRLF
     $args =~ /^VRFY \s (.+) \r\n/imsx;
 
@@ -236,6 +243,13 @@ sub vrfy {
     }
 
     $self->_send('%d As you wish!', CANNOT_VRFY_USER);
+}
+
+sub quit {
+    my ($self, $args) = @_;
+    #$self->session->clean;
+    $self->_send('%d Thank you, come again!', CLOSING_TRANSMISSION);
+    close $self->session->fh;
 }
 
 1;
