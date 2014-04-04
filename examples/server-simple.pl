@@ -21,12 +21,15 @@ my $smtp = SMTP->new(
 );
 
 $smtp->process_message(sub {
-    my ($self, %msg) = @_;
+    my %msg = @_;
+
+    use DDP;
+    p %msg;
 
     # %msg:
     #   - peer
     #   - mailfrom
-    #   - recipeints
+    #   - recipients
     #   - data
 
 });

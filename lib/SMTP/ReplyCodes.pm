@@ -17,7 +17,7 @@ use constant CANNOT_VRFY_USER             => 252;
 use constant START_MAIL_INPUT             => 354;
 
 use constant NOT_AVAILABLE                => 421;
-use constant MAILBOX_UNAVAILABLE          => 450;
+#use constant MAILBOX_UNAVAILABLE          => 450;
 use constant ERROR_IN_PROCESSING          => 451;
 use constant INSUFFICIENT_SYSTEM_STORAGE  => 452;
 use constant UNABLE_TO_ACCOMMODATE_PARAMETERS => 455;
@@ -28,7 +28,7 @@ use constant ERROR_IN_PARAMETERS          => 501;
 use constant COMMAND_NOT_IMPLEMENTED      => 502;
 use constant BAD_SEQUENCE_OF_COMMANDS     => 503;
 use constant PARAMETER_NOT_IMPLEMENTED    => 504;
-#use constant MAILBOX_UNAVAILABLE          => 550;
+use constant MAILBOX_UNAVAILABLE          => 550;
 #use constant USER_NOT_LOCAL               => 551;
 use constant EXCEEDED_STORAGE_ALLOCATION  => 552;
 use constant MAILBOX_NAME_NOT_ALLOWED     => 553;

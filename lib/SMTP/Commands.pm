@@ -112,9 +112,6 @@ sub helo {
 sub mail {
     my ($self, $args) = @_;
 
-# S: 250
-# E: 552, 451, 452, 550, 553, 503, 455, 555
-
     if (!$self->session->get('helo') && !$self->session->get('ehlo')) {
         $self->_send('%d Send EHLO/HELO first', BAD_SEQUENCE_OF_COMMANDS);
         return;
@@ -125,13 +122,19 @@ sub mail {
     # "MAIL FROM:" Reverse-path [SP Mail-parameters] CRLF
     $args =~ /^MAIL \s FROM: (<[^>]+>) \s? (.+)? \r\n/imsx;
 
-    unless ($1) {
-        $self->_send('%d ERROR_IN_PARAMETERS', ERROR_IN_PARAMETERS); # INVALID CODE
+    my $from = $1 || '';
+    unless ($from) {
+        $self->_send(
+            '%d Invalid reverse-path - %s', MAILBOX_NAME_NOT_ALLOWED, $from
+        );
         return;
     }
 
-    my ($from, $params) = ($1, $self->_parse_esmtp_params($2));
+    $self->session->clean;
 
+    my $params = $self->_parse_esmtp_params($2);
+
+    # Set mail-parameters
     if ($params->{SIZE}) {
         unless ($self->extensions->{size}->amount($params->{SIZE})) {
             $self->_send('%d Message size exceeds fixed maximium message size',
@@ -141,15 +144,11 @@ sub mail {
     }
 
     $self->session->store(mail => [$from, $params]);
-
     $self->_send('%d OK', OK);
 }
 
 sub rcpt {
     my ($self, $args) = @_;
-
-# S: 250, 251 (but see Section 3.4 for discussion of 251 and 551)
-# E: 550, 551, 552, 553, 450, 451, 452, 503, 455, 555
 
     # needs MAIL
     unless ($self->session->get('mail')) {
@@ -162,17 +161,18 @@ sub rcpt {
     # "RCPT TO:" ( "<Postmaster@" Domain ">" / "<Postmaster>" / Forward-path ) [SP Rcpt-parameters] CRLF
     $args =~ /^RCPT \s TO: (.+) \s? (.+)? \r\n/imsx;
 
-    unless ($1) {
-        $self->_send('%d ERROR_IN_PARAMETERS', ERROR_IN_PARAMETERS);
+    my $recipient = $1;
+    unless ($recipient) {
+        $self->_send('%d Invalid forward-path - %s',
+            MAILBOX_NAME_NOT_ALLOWED, $recipient);
         return;
     }
 
-    # 550 reply, typically with a string such as "no such user"
+    my $params = $self->_parse_esmtp_params($2);
 
-    my ($recipients, $params) = ($1, $self->_parse_esmtp_params($2));
-
-    $self->session->get('rcpt');
-    $self->session->store(rcpt => [$recipients, $params]);
+    my $rcpt = $self->session->get('rcpt') || [];
+    push @$rcpt, [$recipient, $params];
+    $self->session->store(rcpt => $rcpt);
 
     $self->_send('%d OK', OK);
 }
@@ -180,11 +180,9 @@ sub rcpt {
 sub data {
     my ($self, $fh, $args) = @_;
 
-# E: 503, 554
-
     # needs MAIL and RCPT
     unless ($self->session->get('rcpt')) {
-        $self->_send('%d No valid recipients', TRANSACTION_FAILED);
+        $self->_send('%d No valid recipients', BAD_SEQUENCE_OF_COMMANDS);
         return;
     }
 
@@ -192,7 +190,7 @@ sub data {
     my $data = $self->session->fh->readline("\r\n.\r\n");
 
     unless (defined $data) {
-        $self->_send('%d Error in processing DATA', ERROR_IN_PROCESSING);
+        $self->_send('%d Error in processing DATA', TRANSACTION_FAILED);
         return;
     }
 
@@ -210,10 +208,15 @@ sub data {
     $self->session->store(data => $data);
     $self->_send('%d OK', OK);
 
-use DDP;
-p $self->session->get;
-    # call process_message?
-    #$self->session->daemon->process_message();
+    my $session_data = $self->session->get;
+    $self->session->clean;
+
+    $self->session->daemon->process_message->(
+        peer       => ($self->session->remote_host || $self->session->remote_address),
+        mailfrom   => $session_data->{mail}[0],
+        recipients => [map { $_->[0] } @{ $session_data->{rcpt} }],
+        data       => $data,
+    );
 }
 
 sub rset {
@@ -231,18 +234,9 @@ sub noop {
 
 sub vrfy {
     my ($self, $args) = @_;
-
-# E: 550, 551, 553, 502, 504
-
     # "VRFY" SP String CRLF
-    $args =~ /^VRFY \s (.+) \r\n/imsx;
-
-    unless ($1) {
-        $self->_send('%d error_in_parameters', ERROR_IN_PARAMETERS);
-        return;
-    }
-
-    $self->_send('%d As you wish!', CANNOT_VRFY_USER);
+    $args =~ /^VRFY \s (.+)? \r\n/imsx;
+    $self->_send('%d Access denied to you', MAILBOX_UNAVAILABLE);
 }
 
 sub quit {
