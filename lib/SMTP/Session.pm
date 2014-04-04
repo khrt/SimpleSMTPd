@@ -41,8 +41,8 @@ sub _send {
     my $fh = $self->fh;
 
     if (!$msg) {
-        $msg = ERROR_IN_PROCESSING
-            . " Requested action aborted: error in processing";
+        $msg = "%d Requested action aborted: error in processing";
+        @args = (ERROR_IN_PROCESSING);
     }
 
     printf $fh "$msg\r\n", @args;
