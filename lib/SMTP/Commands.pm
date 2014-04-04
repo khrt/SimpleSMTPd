@@ -13,9 +13,9 @@ sub new {
     my ($class, %args) = @_;
     my $self = bless { %args }, $class;
 
-    $self->{extensions} = [
-        SMTP::Extensions::Size->new
-    ];
+    $self->{extensions} = {
+        size => SMTP::Extensions::Size->new,
+    };
 
     $self;
 }
@@ -46,7 +46,7 @@ sub _parse_esmtp_params {
 
 sub not_implemented {
     my $self = shift;
-    $self->_send(COMMAND_UNRECOGNIZED, 'Unrecognized command');
+    $self->_send('%d Unrecognized command', COMMAND_UNRECOGNIZED);
 }
 
 sub ehlo {
@@ -56,24 +56,26 @@ sub ehlo {
     $args =~ /^EHLO \s (.+) \r\n/imsx;
 
     unless ($1) {
-        $self->_send(ERROR_IN_PARAMETERS, 'ERROR_IN_PARAMETERS');
+        $self->_send('%d ERROR_IN_PARAMETERS', ERROR_IN_PARAMETERS);
         return;
     }
 
     my $domain = $1;
 
-    # ( "220-" (Domain / address-literal)
-    # [ SP textstring ] CRLF
+    # ( "220-" (Domain / address-literal) [ SP textstring ] CRLF
     # *( "220-" [ textstring ] CRLF )
     # "220" [ SP textstring ] CRLF )
+    my @response = ("${ \READY }-Privet $domain, what you wish?");
 
-    my @extensions;
-    foreach my $ext (@{ $self->extensions }) {
-        push @extensions, [$ext->ehlo];
+    foreach my $ext (keys %{ $self->extensions }) {
+        push @response, READY . '-' . $self->extensions->{$ext}->ehlo;
     }
 
+    $response[-1] =~ s/-/ /;
+    my $response = join "\r\n", @response;
+
     $self->session->store(ehlo => $domain);
-    $self->_send(OK, [['Privet %s, what you wish?', $domain], @extensions]);
+    $self->_send($response);
 }
 
 sub helo {
@@ -83,21 +85,21 @@ sub helo {
     $args =~ /^HELO \s (\p{Alnum}+) \r\n/imsx;
 
     unless ($1) {
-        $self->_send(ERROR_IN_PARAMETERS, 'ERROR_IN_PARAMETERS');
+        $self->_send('%d ERROR_IN_PARAMETERS', ERROR_IN_PARAMETERS);
         return;
     }
 
     my $domain = $1;
 
     $self->session->store(helo => $domain);
-    $self->_send(OK, 'Privet %s, what you wish?', $domain);
+    $self->_send('%d Privet %s, what you wish?', OK, $domain);
 }
 
 sub mail {
     my ($self, $args) = @_;
 
     if (!$self->session->get('helo') || $self->session->get('ehlo')) {
-        $self->_send(BAD_SEQUENCE_OF_COMMANDS, 'send EHLO/HELO first');
+        $self->_send('%d send EHLO/HELO first', BAD_SEQUENCE_OF_COMMANDS);
     }
 
     # Mail-parameters  = esmtp-param *(SP esmtp-param)
@@ -106,7 +108,7 @@ sub mail {
     $args =~ m/^MAIL FROM: <([^>]+)> \s? (.+)? \r\n/imsx;
 
     unless ($1) {
-        $self->_send(ERROR_IN_PARAMETERS, 'ERROR_IN_PARAMETERS');
+        $self->_send('%d ERROR_IN_PARAMETERS', ERROR_IN_PARAMETERS);
         return;
     }
 
@@ -116,7 +118,7 @@ sub mail {
     $self->session->store(mail_parameters => $params);
 
     $self->session->data('MAIL');
-    $self->_send(OK, 'OK');
+    $self->_send(OK, '%d OK');
 }
 
 sub rcpt {
@@ -124,7 +126,7 @@ sub rcpt {
 
     # needs MAIL
     unless ($self->session->get('mail')) {
-        $self->_send(BAD_SEQUENCE_OF_COMMANDS, 'send MAIL first')
+        $self->_send('%d send MAIL first', BAD_SEQUENCE_OF_COMMANDS)
     }
 
     # Rcpt-parameters  = esmtp-param *(SP esmtp-param)
@@ -133,7 +135,7 @@ sub rcpt {
     $args =~ /^RCPT TO: (.+) \s (.+)? \r\n/imsx;
 
     unless ($1) {
-        $self->_send(ERROR_IN_PARAMETERS, 'error_in_parameters');
+        $self->_send('%d ERROR_IN_PARAMETERS', ERROR_IN_PARAMETERS);
         return;
     }
 
@@ -143,7 +145,7 @@ sub rcpt {
     $self->session->store(rcpt_parameters => $params);
 
     $self->session->done('RCPT');
-    $self->_send(OK, 'OK');
+    $self->_send('%d OK', OK);
 }
 
 sub data {
@@ -156,19 +158,19 @@ sub rset {
     my ($self, $args) = @_;
     # "RSET" CRLF
     $self->session->clean;
-    $self->_send(OK, 'OK');
+    $self->_send('%d OK', OK);
 }
 
 sub noop {
     my ($self, $args) = @_;
     # "NOOP" [ SP String ] CRLF
-    $self->_send(OK, 'OK');
+    $self->_send('%d OK', OK);
 }
 
 sub quit {
     my ($self, $args) = @_;
     # "QUIT" CRLF
-    $self->_send(CLOSING_TRANSMISSION, 'Thank you, come again!');
+    $self->_send('%d Thank you, come again!', CLOSING_TRANSMISSION);
     close $self->session->fh;
 }
 
@@ -178,11 +180,11 @@ sub vrfy {
     $args =~ /^VRFY \s (.+) \r\n/imsx;
 
     unless ($1) {
-        $self->_send(ERROR_IN_PARAMETERS, 'error_in_parameters');
+        $self->_send('%d error_in_parameters', ERROR_IN_PARAMETERS);
         return;
     }
 
-    $self->_send(CANNOT_VRFY_USER, 'As you wish!');
+    $self->_send('%d As you wish!', CANNOT_VRFY_USER);
 }
 
 1;
