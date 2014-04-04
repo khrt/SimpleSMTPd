@@ -11,15 +11,20 @@ sub new {
     $self;
 }
 
-sub size {
+sub amount {
     my ($self, $size) = @_;
-    $self->{size} = $size if $size;
+
+    if ($size) {
+        return if $size > $self->{size};
+        $self->{size} = $size
+    }
+
     $self->{size} || DEFAULT_SIZE;
 }
 
 sub ehlo {
     my $self = shift;
-    sprintf 'SIZE %d', $self->size;
+    sprintf 'SIZE %d', $self->amount;
 }
 
 1;
@@ -27,3 +32,5 @@ sub ehlo {
 __END__
 
 L<RFC 1870|http://tools.ietf.org/html/rfc1870>
+
+Not implemented 6.1 (1), 6.4

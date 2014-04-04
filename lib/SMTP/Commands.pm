@@ -25,6 +25,18 @@ sub extensions { shift->{extensions} }
 sub session { shift->{session} }
 sub _send { shift->session->_send(@_) }
 
+sub _get_params {
+    my ($self, $cmd) = @_;
+    my $data = $self->session->get('cmd');
+
+    my %params;
+    foreach (@$data) {
+        $params{ keys %{ $_->[1] } } = values %{ $_->[1] };
+    }
+
+    \%params;
+}
+
 sub _parse_esmtp_params {
     my ($self, $str) = @_;
     return if not $str;
@@ -115,6 +127,14 @@ sub mail {
 
     my ($from, $params) = ($1, $self->_parse_esmtp_params($2));
 
+    if ($params->{SIZE}) {
+        unless ($self->extensions->{size}->amount($params->{SIZE})) {
+            $self->_send('%d Message size exceeds fixed maximium message size',
+                EXCEEDED_STORAGE_ALLOCATION);
+            return;
+        }
+    }
+
     $self->session->store(mail => [$from, $params]);
 
     $self->_send('%d OK', OK);
@@ -139,6 +159,8 @@ sub rcpt {
         return;
     }
 
+    # 550 reply, typically with a string such as "no such user"
+
     my ($recipients, $params) = ($1, $self->_parse_esmtp_params($2));
 
     $self->session->store(rcpt => [$recipients, $params]);
@@ -149,7 +171,38 @@ sub rcpt {
 sub data {
     my ($self, $fh, $args) = @_;
 
-    # needs RCPT
+    # needs MAIL and RCPT
+    unless ($self->session->get('rcpt')) {
+        $self->_send('%d No valid recipients', TRANSACTION_FAILED);
+        return;
+    }
+
+    $self->_send('%d Start mail input; end with <CRLF>.<CRLF>', START_MAIL_INPUT);
+    my $data = $self->session->fh->readline("\r\n.\r\n");
+
+    unless (defined $data) {
+        $self->_send('%d Error in processing DATA', ERROR_IN_PROCESSING);
+        return;
+    }
+
+    $data =~ s/\r\n.\r\n$//msx;
+
+    {
+        use bytes;
+        my $max_size = $self->extensions->{size}->amount;
+        if (bytes::length($data) > $max_size) {
+            $self->_send('%d Size limit exceeded', EXCEEDED_STORAGE_ALLOCATION);
+            return;
+        }
+    }
+
+    $self->session->store(data => $data);
+    $self->_send('%d OK', OK);
+
+use DDP;
+p $self->session->get;
+    # call process_message?
+    #$self->session->daemon->process_message();
 }
 
 sub rset {
