@@ -37,8 +37,8 @@ sub _parse_esmtp_params {
     #               ; SHOULD be used.
 
     my %params;
-    while ($str =~ /([[:alpha:][:digit:]-]+)=([^\s=])/gmsx) {
-        $params{$1} = $2;
+    while ($str =~ /([[:alpha:][:digit:]-]+)(?:=([^\s=]))?/gmsx) {
+        $params{$1} = $2 || 1;
     }
 
     \%params;
@@ -53,7 +53,7 @@ sub ehlo {
     my ($self, $args) = @_;
 
     # "EHLO" SP ( Domain / address-literal ) CRLF
-    $args =~ /^EHLO \s (.+) \r\n/imsx;
+    $args =~ /^EHLO \s (\p{Alnum}+) \r\n/imsx;
 
     unless ($1) {
         $self->_send('%d ERROR_IN_PARAMETERS', ERROR_IN_PARAMETERS);
@@ -98,14 +98,15 @@ sub helo {
 sub mail {
     my ($self, $args) = @_;
 
-    if (!$self->session->get('helo') || $self->session->get('ehlo')) {
+    if (!$self->session->get('helo') && !$self->session->get('ehlo')) {
         $self->_send('%d send EHLO/HELO first', BAD_SEQUENCE_OF_COMMANDS);
+        return;
     }
 
     # Mail-parameters  = esmtp-param *(SP esmtp-param)
     # esmtp-param      = esmtp-keyword ["=" esmtp-value]
     # "MAIL FROM:" Reverse-path [SP Mail-parameters] CRLF
-    $args =~ m/^MAIL FROM: <([^>]+)> \s? (.+)? \r\n/imsx;
+    $args =~ /^MAIL \s FROM: (<[^>]+>) \s? (.+)? \r\n/imsx;
 
     unless ($1) {
         $self->_send('%d ERROR_IN_PARAMETERS', ERROR_IN_PARAMETERS);
@@ -114,11 +115,9 @@ sub mail {
 
     my ($from, $params) = ($1, $self->_parse_esmtp_params($2));
 
-    $self->session->store(mail => $from);
-    $self->session->store(mail_parameters => $params);
+    $self->session->store(mail => [$from, $params]);
 
-    $self->session->data('MAIL');
-    $self->_send(OK, '%d OK');
+    $self->_send('%d OK', OK);
 }
 
 sub rcpt {
@@ -126,13 +125,14 @@ sub rcpt {
 
     # needs MAIL
     unless ($self->session->get('mail')) {
-        $self->_send('%d send MAIL first', BAD_SEQUENCE_OF_COMMANDS)
+        $self->_send('%d send MAIL first', BAD_SEQUENCE_OF_COMMANDS);
+        return;
     }
 
     # Rcpt-parameters  = esmtp-param *(SP esmtp-param)
     # esmtp-param      = esmtp-keyword ["=" esmtp-value]
     # "RCPT TO:" ( "<Postmaster@" Domain ">" / "<Postmaster>" / Forward-path ) [SP Rcpt-parameters] CRLF
-    $args =~ /^RCPT TO: (.+) \s (.+)? \r\n/imsx;
+    $args =~ /^RCPT \s TO: (.+) \s (.+)? \r\n/imsx;
 
     unless ($1) {
         $self->_send('%d ERROR_IN_PARAMETERS', ERROR_IN_PARAMETERS);
@@ -141,10 +141,8 @@ sub rcpt {
 
     my ($recipients, $params) = ($1, $self->_parse_esmtp_params($2));
 
-    $self->session->store(rcpt => $recipients);
-    $self->session->store(rcpt_parameters => $params);
+    $self->session->store(rcpt => [$recipients, $params]);
 
-    $self->session->done('RCPT');
     $self->_send('%d OK', OK);
 }
 

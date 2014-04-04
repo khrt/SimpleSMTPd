@@ -16,7 +16,7 @@ sub new {
     my $self = bless { %args }, $class;
 
     if ($self->daemon->{listen}) {
-        my ($port, $iaddr) = unpack_sockaddr_in($self->fh->peername)
+        my (undef, $iaddr) = unpack_sockaddr_in($self->fh->peername)
             or $self->slog(warn => 'Unable to get peername.');
         $self->{remote_address} = inet_ntoa($iaddr);
 
@@ -31,7 +31,8 @@ sub new {
 sub command { shift->{command} }
 sub daemon { shift->{daemon} }
 sub fh { shift->{fh} }
-sub remote_address { shift->{remote_address} || 'UNKNOWN' }
+sub remote_address { shift->{remote_address} || '--' }
+sub remote_host { shift->{remote_host} || '--' }
 
 sub slog { shift->daemon->logger(@_) }
 
@@ -57,7 +58,7 @@ sub get {
         $key = lc $key;
         my $data = $self->{data}{$key};
         #return $self->{data}{$key}[0] if ref($data) && scalar(@$data) == 1;
-        return $self->{data}{$key}
+        return $self->{data}{$key};
     }
 
     $self->{data};
