@@ -99,7 +99,7 @@ sub mail {
     my ($self, $args) = @_;
 
     if (!$self->session->get('helo') && !$self->session->get('ehlo')) {
-        $self->_send('%d send EHLO/HELO first', BAD_SEQUENCE_OF_COMMANDS);
+        $self->_send('%d Send EHLO/HELO first', BAD_SEQUENCE_OF_COMMANDS);
         return;
     }
 
@@ -125,14 +125,14 @@ sub rcpt {
 
     # needs MAIL
     unless ($self->session->get('mail')) {
-        $self->_send('%d send MAIL first', BAD_SEQUENCE_OF_COMMANDS);
+        $self->_send('%d Need MAIL command', BAD_SEQUENCE_OF_COMMANDS);
         return;
     }
 
     # Rcpt-parameters  = esmtp-param *(SP esmtp-param)
     # esmtp-param      = esmtp-keyword ["=" esmtp-value]
     # "RCPT TO:" ( "<Postmaster@" Domain ">" / "<Postmaster>" / Forward-path ) [SP Rcpt-parameters] CRLF
-    $args =~ /^RCPT \s TO: (.+) \s (.+)? \r\n/imsx;
+    $args =~ /^RCPT \s TO: (.+) \s? (.+)? \r\n/imsx;
 
     unless ($1) {
         $self->_send('%d ERROR_IN_PARAMETERS', ERROR_IN_PARAMETERS);
