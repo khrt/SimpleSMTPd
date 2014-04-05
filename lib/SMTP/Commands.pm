@@ -3,18 +3,22 @@ package SMTP::Commands;
 use strict;
 use warnings;
 
-use SMTP::Extensions::Size;
-#use SMTP::Extensions::8BitMIME;
-#use SMTP::Extensions::EnhancedStatusCodes;
+use SMTP::Extensions::8BitMIME;
 #use SMTP::Extensions::Auth::Login
-use SMTP::ReplyCodes;
+use SMTP::Extensions::EnhancedStatusCodes;
+use SMTP::Extensions::Help;
+use SMTP::Extensions::Size;
+use SMTP::StatusCodes;
 
 sub new {
     my ($class, %args) = @_;
     my $self = bless { %args }, $class;
 
     $self->{extensions} = {
+        #'8bitmime' => SMTP::Extensions::8BitMIME->new,
         size => SMTP::Extensions::Size->new,
+        #help => SMTP::Extensions::Help->new,
+        #enhancedstatuscodes => SMTP::Extensions::EnhancedStatusCodes->new,
     };
 
     $self;
@@ -49,8 +53,8 @@ sub _parse_esmtp_params {
     #               ; SHOULD be used.
 
     my %params;
-    while ($str =~ /([[:alpha:][:digit:]-]+)(?:=([^\s=]))?/gmsx) {
-        $params{$1} = $2 || 1;
+    while ($str =~ /([[:alpha:][:digit:]-]+)(?:=([^\cK\s=]))?/gmsx) {
+        $params{lc($1)} = $2 || 1;
     }
 
     \%params;
@@ -135,14 +139,15 @@ sub mail {
     my $params = $self->_parse_esmtp_params($2);
 
     # Set mail-parameters
-    if ($params->{SIZE}) {
-        unless ($self->extensions->{size}->amount($params->{SIZE})) {
+    if ($params->{size}) {
+        unless ($self->extensions->{size}->amount($params->{size})) {
             $self->_send('%d Message size exceeds fixed maximium message size',
                 EXCEEDED_STORAGE_ALLOCATION);
             return;
         }
     }
 
+    # set reverse-path buffer
     $self->session->store(mail => [$from, $params]);
     $self->_send('%d OK', OK);
 }
@@ -172,6 +177,7 @@ sub rcpt {
 
     my $rcpt = $self->session->get('rcpt') || [];
     push @$rcpt, [$recipient, $params];
+    # set forward-path buffer
     $self->session->store(rcpt => $rcpt);
 
     $self->_send('%d OK', OK);
@@ -205,6 +211,7 @@ sub data {
         }
     }
 
+    # set mail data buffer
     $self->session->store(data => $data);
     $self->_send('%d OK', OK);
 
