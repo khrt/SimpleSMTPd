@@ -6,7 +6,7 @@ use warnings;
 use Carp;
 
 use SMTP::Commands;
-use SMTP::ReplyCodes;
+use SMTP::StatusCodes;
 use IO::Socket::INET;
 
 use Socket qw(getnameinfo);

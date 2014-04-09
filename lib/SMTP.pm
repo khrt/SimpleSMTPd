@@ -12,7 +12,7 @@ use IO::Socket::INET;
 use IO::Socket::UNIX;
 
 use SMTP::Commands;
-use SMTP::ReplyCodes;
+use SMTP::StatusCodes;
 use SMTP::Session;
 
 use constant NAME => 'Perl SMTPd RFC5321';
@@ -114,3 +114,10 @@ sub on {
 }
 
 1;
+
+__END__
+https://tools.ietf.org/html/rfc2034
+https://tools.ietf.org/html/rfc1893
+http://tools.ietf.org/html/rfc4954#section-4
+http://tools.ietf.org/html/rfc5321#section-4.1.1
+https://github.com/andris9/simplesmtp/blob/master/lib/server.js
