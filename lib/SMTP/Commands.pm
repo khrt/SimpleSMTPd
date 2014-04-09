@@ -18,10 +18,15 @@ sub new {
         #'8bitmime' => SMTP::Extensions::8BitMIME->new,
         size => SMTP::Extensions::Size->new,
         #help => SMTP::Extensions::Help->new,
-        #enhancedstatuscodes => SMTP::Extensions::EnhancedStatusCodes->new,
+        enhancedstatuscodes => SMTP::Extensions::EnhancedStatusCodes->new,
     };
 
     $self;
+}
+
+# TODO: register new command into namespace
+sub register {
+    my ($self, $name, $code) = @_;
 }
 
 sub extensions { shift->{extensions} }
@@ -62,7 +67,11 @@ sub _parse_esmtp_params {
 
 sub not_implemented {
     my $self = shift;
-    $self->_send('%d Unrecognized command', COMMAND_UNRECOGNIZED);
+    $self->_send(
+        '%d %s Unrecognized command',
+        COMMAND_UNRECOGNIZED,
+        ES_PERMANENT_FAILURE('INVALID_COMMAND')
+    );
 }
 
 sub ehlo {
@@ -72,7 +81,11 @@ sub ehlo {
     $args =~ /^EHLO \s (\p{Alnum}+) \r\n/imsx;
 
     unless ($1) {
-        $self->_send('%d ERROR_IN_PARAMETERS', ERROR_IN_PARAMETERS);
+        $self->_send(
+            '%d %s Invalid arguments',
+            ERROR_IN_PARAMETERS,
+            ES_PERMANENT_FAILURE('INVALID_COMMAND_ARGUMENTS')
+        );
         return;
     }
 
@@ -83,7 +96,7 @@ sub ehlo {
     # ( "220-" (Domain / address-literal) [ SP textstring ] CRLF
     # *( "220-" [ textstring ] CRLF )
     # "220" [ SP textstring ] CRLF )
-    my @response = ("${ \READY }-Privet $domain, what you wish?");
+    my @response = ("${ \READY }-Privet $domain, how\'s tricks?");
 
     foreach my $ext (keys %{ $self->extensions }) {
         push @response, READY . '-' . $self->extensions->{$ext}->ehlo;
@@ -103,23 +116,33 @@ sub helo {
     $args =~ /^HELO \s (\p{Alnum}+) \r\n/imsx;
 
     unless ($1) {
-        $self->_send('%d ERROR_IN_PARAMETERS', ERROR_IN_PARAMETERS);
+        $self->_send(
+            '%d %s Invalid arguments',
+            ERROR_IN_PARAMETERS,
+            ES_PERMANENT_FAILURE('INVALID_COMMAND_ARGUMENTS')
+        );
         return;
     }
 
     my $domain = $1;
 
     $self->session->store(helo => $domain);
-    $self->_send('%d Privet %s, what you wish?', OK, $domain);
+    $self->_send('%d Privet %s, how\'s tricks?', OK, $domain);
 }
 
 sub mail {
     my ($self, $args) = @_;
 
     if (!$self->session->get('helo') && !$self->session->get('ehlo')) {
-        $self->_send('%d Send EHLO/HELO first', BAD_SEQUENCE_OF_COMMANDS);
+        $self->_send(
+            '%d %s Send EHLO/HELO first',
+            BAD_SEQUENCE_OF_COMMANDS,
+            ES_PERMANENT_FAILURE('INVALID_COMMAND')
+        );
         return;
     }
+
+    # TODO: FORBID NESTED COMMAND OR REWRITE?
 
     # Mail-parameters  = esmtp-param *(SP esmtp-param)
     # esmtp-param      = esmtp-keyword ["=" esmtp-value]
@@ -129,7 +152,10 @@ sub mail {
     my $from = $1 || '';
     unless ($from) {
         $self->_send(
-            '%d Invalid reverse-path - %s', MAILBOX_NAME_NOT_ALLOWED, $from
+            '%d %s Invalid reverse-path - %s',
+            MAILBOX_NAME_NOT_ALLOWED,
+            ES_PERMANENT_FAILURE('BAD_DESTINATION_MAILBOX_ADDRESS_SYNTAX'),
+            $from
         );
         return;
     }
@@ -139,17 +165,21 @@ sub mail {
     my $params = $self->_parse_esmtp_params($2);
 
     # Set mail-parameters
+    # Set SIZE
     if ($params->{size}) {
         unless ($self->extensions->{size}->amount($params->{size})) {
-            $self->_send('%d Message size exceeds fixed maximium message size',
-                EXCEEDED_STORAGE_ALLOCATION);
+            $self->_send(
+                '%d %s Message size exceeds fixed maximium message size',
+                EXCEEDED_STORAGE_ALLOCATION,
+                ES_PERMANENT_FAILURE('MESSAGE_LENGTH_EXCEEDS_ADMINISTRATIVE_LIMIT')
+            );
             return;
         }
     }
 
     # set reverse-path buffer
     $self->session->store(mail => [$from, $params]);
-    $self->_send('%d OK', OK);
+    $self->_send('%d %s OK', OK, ES_SUCCESS('OTHER_ADDRESS_STATUS'));
 }
 
 sub rcpt {
@@ -157,7 +187,11 @@ sub rcpt {
 
     # needs MAIL
     unless ($self->session->get('mail')) {
-        $self->_send('%d Need MAIL command', BAD_SEQUENCE_OF_COMMANDS);
+        $self->_send(
+            '%d %s Need MAIL command',
+            BAD_SEQUENCE_OF_COMMANDS,
+            ES_PERMANENT_FAILURE('INVALID_COMMAND')
+        );
         return;
     }
 
@@ -168,8 +202,12 @@ sub rcpt {
 
     my $recipient = $1;
     unless ($recipient) {
-        $self->_send('%d Invalid forward-path - %s',
-            MAILBOX_NAME_NOT_ALLOWED, $recipient);
+        $self->_send(
+            '%d %s Invalid forward-path - %s',
+            MAILBOX_NAME_NOT_ALLOWED,
+            ES_PERMANENT_FAILURE('BAD_DESTINATION_MAILBOX_ADDRESS_SYNTAX'),
+            $recipient
+        );
         return;
     }
 
@@ -180,15 +218,20 @@ sub rcpt {
     # set forward-path buffer
     $self->session->store(rcpt => $rcpt);
 
-    $self->_send('%d OK', OK);
+    $self->_send('%d %s OK', OK, ES_SUCCESS('DESTINATION_ADDRESS_VALID'));
 }
 
+# NOTE: FH
 sub data {
     my ($self, $fh, $args) = @_;
 
     # needs MAIL and RCPT
     unless ($self->session->get('rcpt')) {
-        $self->_send('%d No valid recipients', BAD_SEQUENCE_OF_COMMANDS);
+        $self->_send(
+            '%d %s No valid recipients',
+            BAD_SEQUENCE_OF_COMMANDS,
+            ES_PERMANENT_FAILURE('INVALID_COMMAND')
+        );
         return;
     }
 
@@ -196,7 +239,11 @@ sub data {
     my $data = $self->session->fh->readline("\r\n.\r\n");
 
     unless (defined $data) {
-        $self->_send('%d Error in processing DATA', TRANSACTION_FAILED);
+        $self->_send(
+            '%d %s Error in processing DATA',
+            TRANSACTION_FAILED,
+            ES_PERMANENT_FAILURE('CONVERSION_FAILED')
+        );
         return;
     }
 
@@ -206,14 +253,22 @@ sub data {
         use bytes;
         my $max_size = $self->extensions->{size}->amount;
         if (bytes::length($data) > $max_size) {
-            $self->_send('%d Size limit exceeded', EXCEEDED_STORAGE_ALLOCATION);
+            $self->_send(
+                '%d %s Size limit exceeded',
+                EXCEEDED_STORAGE_ALLOCATION,
+                ES_PERMANENT_FAILURE('MESSAGE_LENGTH_EXCEEDS_ADMINISTRATIVE_LIMIT')
+            );
             return;
         }
     }
 
     # set mail data buffer
     $self->session->store(data => $data);
-    $self->_send('%d OK', OK);
+    $self->_send(
+        '%d %s Message accepted',
+        OK,
+        ES_SUCCESS('OTHER_OR_UNDEFINED_MEDIA_ERROR')
+    );
 
     my $session_data = $self->session->get;
     $self->session->clean;
@@ -230,26 +285,35 @@ sub rset {
     my ($self, $args) = @_;
     # "RSET" CRLF
     $self->session->clean;
-    $self->_send('%d OK', OK);
+    $self->_send('%d %s OK', OK, ES_SUCCESS('OTHER_UNDEFINED_STATUS'));
 }
 
 sub noop {
     my ($self, $args) = @_;
     # "NOOP" [ SP String ] CRLF
-    $self->_send('%d OK', OK);
+    $self->_send('%d %s OK', OK, ES_SUCCESS('OTHER_UNDEFINED_STATUS'));
 }
 
 sub vrfy {
     my ($self, $args) = @_;
     # "VRFY" SP String CRLF
     $args =~ /^VRFY \s (.+)? \r\n/imsx;
-    $self->_send('%d Access denied to you', MAILBOX_UNAVAILABLE);
+    $self->_send(
+        '%d %s Access denied to you',
+        MAILBOX_UNAVAILABLE,
+        ES_PERMANENT_FAILURE('MAILING_LIST_EXPANSION_PROHIBITED')
+    );
 }
 
+# NOTE: FH
 sub quit {
     my ($self, $args) = @_;
-    #$self->session->clean;
-    $self->_send('%d Thank you, come again!', CLOSING_TRANSMISSION);
+    $self->session->clean;
+    $self->_send(
+        '%d %s Thank you, come again!',
+        CLOSING_TRANSMISSION,
+        ES_SUCCESS('OTHER_UNDEFINED_STATUS')
+    );
     close $self->session->fh;
 }
 

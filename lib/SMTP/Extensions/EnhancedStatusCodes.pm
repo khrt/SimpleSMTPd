@@ -5,6 +5,8 @@ use warnings;
 
 use base 'Exporter';
 
+our @EXPORT = qw(ES_SUCCESS ES_TRANSIENT_FAILURE ES_PERMANENT_FAILURE);
+
 # Other or Undefined Status
 use constant OTHER_UNDEFINED_STATUS => '0.0';
 
@@ -12,7 +14,11 @@ use constant OTHER_UNDEFINED_STATUS => '0.0';
 use constant OTHER_ADDRESS_STATUS                   => '1.0';
 use constant BAD_DESTINATION_MAILBOX_ADDRESS        => '1.1';
 use constant BAD_DESTINATION_SYSTEM_ADDRESS         => '1.2';
+use constant BAD_DESTINATION_MAILBOX_ADDRESS_SYNTAX => '1.3';
 use constant DESTINATION_MAILBOX_ADDRESS_AMBIGUOUS  => '1.4';
+use constant DESTINATION_ADDRESS_VALID              => '1.5';
+use constant DESTINATION_MAILBOX_HAS_MOVED          => '1.6';
+use constant NO_FORWARDING_ADDRESS                  => '1.6';
 use constant BAD_SENDERS_MAILBOX_ADDRESS_SYNTAX     => '1.7';
 use constant BAD_SENDERS_SYSTEM_ADDRESS             => '1.8';
 
@@ -68,8 +74,6 @@ use constant CRYPTOGRAPHIC_FAILURE                         => '7.5';
 use constant CRYPTOGRAPHIC_ALGORITHM_NOT_SUPPORTED         => '7.6';
 use constant MESSAGE_INTEGRITY_FAILURE                     => '7.7';
 
-our @EXPORT = qw(ES_SUCCES ES_TRANSIENT_FAILURE ES_PERMANENT_FAILURE);
-
 sub new {
     my ($class, %args) = @_;
     my $self = bless { %args }, $class;
@@ -78,12 +82,19 @@ sub new {
 
 sub ehlo { 'ENHANCEDSTATUSCODES' }
 
-sub ES_SUCCESS { '2.' . &{ $_[0] } }
-sub ES_TRANSIENT_FAILURE { '4.' . &{ $_[0] } }
-sub ES_PERMANENT_FAILURE { '5.' . &{ $_[0] } }
+sub _print {
+    my ($class, $cname) = @_;
+    no strict 'refs';
+    sprintf '%s.%s', $class, &$cname;
+}
+
+sub ES_SUCCESS { _print(2, $_[0]) }
+sub ES_TRANSIENT_FAILURE { _print(4, $_[0]) }
+sub ES_PERMANENT_FAILURE { _print(5, $_[0]) }
 
 1;
 
 __END__
 
+L<RFC2034|http://tools.ietf.org/html/rfc2034>
 L<RFC1893|http://tools.ietf.org/html/rfc1893>
