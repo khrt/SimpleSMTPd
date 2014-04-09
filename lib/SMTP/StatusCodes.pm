@@ -36,7 +36,6 @@ use constant TRANSACTION_FAILED           => 554;
 use constant NO_SMTP_SERVICE_HERE         => 554;
 use constant PARAMETERS_NOT_RECOGNIZED    => 555;
 
-
 our @EXPORT = qw(
 SYSTEM_STATUS
 SYSTEM_HELP_REPLY
