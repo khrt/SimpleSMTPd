@@ -45,7 +45,8 @@ sub help {
 %d-%s "%s" ABNF Syntax:
 %d-%s %s
 HELP_END
-        $response = sprintf $help, (@statuses) x 2;
+        $response = sprintf $help,
+            @statuses, uc($keyword), @statuses, $HELP{$keyword};
     }
     elsif ($keyword && !$HELP{$keyword}) {
         $response =
