@@ -45,6 +45,7 @@ sub _send {
         @args = (ERROR_IN_PROCESSING);
     }
 
+    chomp($msg);
     printf $fh "$msg\r\n", @args;
 }
 

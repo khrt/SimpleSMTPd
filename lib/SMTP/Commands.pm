@@ -16,17 +16,12 @@ sub new {
 
     $self->{extensions} = {
         #'8bitmime' => SMTP::Extensions::8BitMIME->new,
-        size => SMTP::Extensions::Size->new,
-        #help => SMTP::Extensions::Help->new,
         enhancedstatuscodes => SMTP::Extensions::EnhancedStatusCodes->new,
+        help => SMTP::Extensions::Help->new,
+        size => SMTP::Extensions::Size->new,
     };
 
     $self;
-}
-
-# TODO: register new command into namespace
-sub register {
-    my ($self, $name, $code) = @_;
 }
 
 sub extensions { shift->{extensions} }

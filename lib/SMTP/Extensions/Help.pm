@@ -3,7 +3,12 @@ package SMTP::Extensions::Help;
 use strict;
 use warnings;
 
+use base 'Exporter';
+
+our @EXPORT = qw(help);
+
 use SMTP::StatusCodes;
+use SMTP::Extensions::EnhancedStatusCodes;
 
 my %HELP = (
     ehlo => '"EHLO" SP ( Domain / address-literal ) CRLF',
@@ -25,6 +30,8 @@ sub new {
     $self;
 }
 
+sub ehlo { 'HELP' }
+
 sub help {
     my ($self, $args) = @_;
 
@@ -32,12 +39,40 @@ sub help {
     my $keyword = $1;
 
     my $response;
+    my @statuses = (HELP_MESSAGE, ES_SUCCESS('OTHER_UNDEFINED_STATUS'));
     if ($keyword && $HELP{$keyword}) {
-        $response = sprintf '%d %s', HELP_MESSAGE, $HELP{$keyword};
+        my $help = <<HELP_END;
+%d-%s "%s" ABNF Syntax:
+%d-%s %s
+HELP_END
+        $response = sprintf $help, (@statuses) x 2;
+    }
+    elsif ($keyword && !$HELP{$keyword}) {
+        $response =
+            sprintf "%d %s Keyword %s is not implemented!\r\n",
+                HELP_MESSAGE,
+                ES_PERMANENT_FAILURE('INVALID_COMMAND_ARGUMENTS'),
+                uc($keyword);
     }
     else {
-        $response = sprintf '%d RFC5321 http://tools.ietf.org/html/rfc5321',
-            HELP_MESSAGE;
+        my $help = <<HELP_END;
+%d-%s This server implementation matches RFC5321.
+%d-%s Learn more at http://tools.ietf.org/html/rfc5321
+%d-%s --
+%d-%s Extended HELLO (EHLO)
+%d-%s HELLO          (HELO)
+%d-%s MAIL           (MAIL)
+%d-%s RECIPIENT      (RCPT)
+%d-%s DATA           (DATA)
+%d-%s RESET          (RSET)
+%d-%s VERIFY         (VRFY)
+%d-%s EXPAND         (EXPN)
+%d-%s HELP           (HELP)
+%d-%s NOOP           (NOOP)
+%d %s QUIT           (QUIT)
+HELP_END
+        my $lines = $help =~ tr/\r\n//;
+        $response = sprintf $help, (@statuses) x ($lines + 1);
     }
 
     # S: 211, 214
