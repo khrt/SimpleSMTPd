@@ -50,7 +50,7 @@ HELP_END
     }
     elsif ($keyword && !$HELP{$keyword}) {
         $response =
-            sprintf "%d %s Keyword %s is not implemented!\r\n",
+            sprintf "%d %s Keyword \"%s\" is not implemented!\r\n",
                 HELP_MESSAGE,
                 ES_PERMANENT_FAILURE('INVALID_COMMAND_ARGUMENTS'),
                 uc($keyword);
