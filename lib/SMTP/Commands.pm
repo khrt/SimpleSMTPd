@@ -15,7 +15,7 @@ sub new {
     my $self = bless { %args }, $class;
 
     $self->{extensions} = {
-        #'8bitmime' => SMTP::Extensions::8BitMIME->new,
+        '8bitmime' => SMTP::Extensions::8BitMIME->new,
         enhancedstatuscodes => SMTP::Extensions::EnhancedStatusCodes->new,
         help => SMTP::Extensions::Help->new,
         size => SMTP::Extensions::Size->new,
@@ -287,6 +287,17 @@ sub noop {
     my ($self, $args) = @_;
     # "NOOP" [ SP String ] CRLF
     $self->_send('%d %s OK', OK, ES_SUCCESS('OTHER_UNDEFINED_STATUS'));
+}
+
+sub expn {
+    my ($self, $args) = @_;
+    # "EXPN" SP String CRLF
+    $args =~ /^EXPN \s (.+)? \r\n/imsx;
+    $self->_send(
+        '%d %s Access denied to you',
+        MAILBOX_UNAVAILABLE,
+        ES_PERMANENT_FAILURE('OTHER_UNDEFINED_STATUS')
+    );
 }
 
 sub vrfy {
