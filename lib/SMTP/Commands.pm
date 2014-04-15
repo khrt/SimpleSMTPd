@@ -4,7 +4,7 @@ use strict;
 use warnings;
 
 use SMTP::Extensions::8BitMIME;
-#use SMTP::Extensions::Auth::Login
+use SMTP::Extensions::Auth;
 use SMTP::Extensions::EnhancedStatusCodes;
 use SMTP::Extensions::Help;
 use SMTP::Extensions::Size;
@@ -73,7 +73,7 @@ sub ehlo {
     my ($self, $args) = @_;
 
     # "EHLO" SP ( Domain / address-literal ) CRLF
-    $args =~ /^EHLO \s (\p{Alnum}+) \r\n/imsx;
+    $args =~ /^EHLO \s ( \p{Alnum}+ (?: .\p{Alnum} )* ) \r\n/imsx;
 
     unless ($1) {
         $self->_send(
@@ -108,7 +108,7 @@ sub helo {
     my ($self, $args) = @_;
 
     # "HELO" SP Domain CRLF
-    $args =~ /^HELO \s (\p{Alnum}+) \r\n/imsx;
+    $args =~ /^HELO \s ( \p{Alnum}+ (?: .\p{Alnum} )* ) \r\n/imsx;
 
     unless ($1) {
         $self->_send(
@@ -136,8 +136,6 @@ sub mail {
         );
         return;
     }
-
-    # TODO: FORBID NESTED COMMAND OR REWRITE?
 
     # Mail-parameters  = esmtp-param *(SP esmtp-param)
     # esmtp-param      = esmtp-keyword ["=" esmtp-value]
