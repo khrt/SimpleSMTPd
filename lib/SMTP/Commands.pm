@@ -16,6 +16,7 @@ sub new {
 
     $self->{extensions} = {
         '8bitmime' => SMTP::Extensions::8BitMIME->new,
+        auth => SMTP::Extensions::Auth->new,
         enhancedstatuscodes => SMTP::Extensions::EnhancedStatusCodes->new,
         help => SMTP::Extensions::Help->new,
         size => SMTP::Extensions::Size->new,
@@ -53,7 +54,7 @@ sub _parse_esmtp_params {
     #               ; SHOULD be used.
 
     my %params;
-    while ($str =~ /([[:alpha:][:digit:]-]+)(?:=([^\cK\s=]))?/gmsx) {
+    while ($str =~ /([[:alpha:][:digit:]-]+) (?:=([^\cK\s=]))?/gmsx) {
         $params{lc($1)} = $2 || 1;
     }
 
@@ -91,7 +92,7 @@ sub ehlo {
     # ( "220-" (Domain / address-literal) [ SP textstring ] CRLF
     # *( "220-" [ textstring ] CRLF )
     # "220" [ SP textstring ] CRLF )
-    my @response = ("${ \READY }-Privet $domain, how\'s tricks?");
+    my @response = ("${ \READY }-Privet $domain");
 
     foreach my $ext (keys %{ $self->extensions }) {
         push @response, READY . '-' . $self->extensions->{$ext}->ehlo;
@@ -122,7 +123,7 @@ sub helo {
     my $domain = $1;
 
     $self->session->store(helo => $domain);
-    $self->_send('%d Privet %s, how\'s tricks?', OK, $domain);
+    $self->_send('%d Privet %s', OK, $domain);
 }
 
 sub mail {

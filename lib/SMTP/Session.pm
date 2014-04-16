@@ -4,12 +4,11 @@ use strict;
 use warnings;
 
 use Carp;
+use IO::Socket::INET;
+use Socket qw(getnameinfo);
 
 use SMTP::Commands;
 use SMTP::StatusCodes;
-use IO::Socket::INET;
-
-use Socket qw(getnameinfo);
 
 sub new {
     my ($class, %args) = @_;
@@ -72,25 +71,22 @@ sub handle {
     $self->_send('%d %s %s', READY, $self->daemon->address, $self->daemon->name);
 
     while (1) {
-        #$fh->timeout($::REQ_TIMEOUT);
+#        $fh->timeout($::REQ_TIMEOUT);
         my $req = $fh->readline("\r\n");
-        #$fh->timeout($::RES_TIMEOUT);
-
-        #defined $req or $self->err(408, "request timeout");
+#        $fh->timeout($::RES_TIMEOUT);
 
         unless (defined $req) {
             close $fh; # TODO: handle my be already closed
-            $self->slog(info => 'Connection closed');
+            $self->slog(info => '%s disconnected', $self->remote_address);
             last;
         }
 
         my ($cmd, $args) = split /\s/, $req, 2;
         $cmd = lc($cmd);
 
+        $self->slog(debug => $req);
+
         if ($self->{command}->can($cmd)) {
-            # NOTE:
-            # eval { $cmd }
-            # if $@ -> last;
             $self->{command}->$cmd($req);
         }
         else {

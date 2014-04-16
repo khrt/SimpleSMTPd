@@ -13,11 +13,6 @@ my $smtp = SMTP->new(
 
     log_level => 'debug',
     #log_file => '',
-
-#    user => '',
-#    group => '',
-
-    process_message => sub { die 'NOT IMPLEMENTED' }
 );
 
 $smtp->process_message(sub {
@@ -31,19 +26,11 @@ $smtp->process_message(sub {
     #   - mailfrom
     #   - recipients
     #   - data
-
 });
 
-# EHLO
-# HELO
-# MAIL
-# RCPT
+# AUTH
 # DATA
-# RSET
-# NOOP
-# QUIT
+# EXPN
 # VRFY
-#$smtp->on('ehlo', sub {});
-#$smtp->on('helo', sub {});
 
 $smtp->run;

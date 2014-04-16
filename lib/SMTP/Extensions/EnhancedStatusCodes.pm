@@ -74,6 +74,11 @@ use constant CRYPTOGRAPHIC_FAILURE                         => '7.5';
 use constant CRYPTOGRAPHIC_ALGORITHM_NOT_SUPPORTED         => '7.6';
 use constant MESSAGE_INTEGRITY_FAILURE                     => '7.7';
 
+# Auth
+use constant AUTHENTICATION_CREDENTIALS_INVALID => '7.8';
+use constant AUTHENTICATION_MECHANISM_IS_TOO_WEAK => 7.9;
+use constant ENCRYPTION_REQUIRED => 7.11;
+
 sub new {
     my ($class, %args) = @_;
     my $self = bless { %args }, $class;

@@ -5,6 +5,11 @@ use warnings;
 
 use base 'Exporter';
 
+use constant AUTH_READY    => 334;
+use constant AUTH_SUCCESS  => 235;
+use constant AUTH_REQUIRED => 530;
+use constant AUTH_FAILED   => 535;
+
 use constant SYSTEM_STATUS                => 211;
 use constant SYSTEM_HELP_REPLY            => 211;
 use constant HELP_MESSAGE                 => 214;
@@ -37,6 +42,10 @@ use constant NO_SMTP_SERVICE_HERE         => 554;
 use constant PARAMETERS_NOT_RECOGNIZED    => 555;
 
 our @EXPORT = qw(
+AUTH_READY
+AUTH_SUCCESS
+AUTH_FAILED
+
 SYSTEM_STATUS
 SYSTEM_HELP_REPLY
 HELP_MESSAGE READY

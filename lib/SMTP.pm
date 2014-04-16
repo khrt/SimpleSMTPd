@@ -15,8 +15,6 @@ use SMTP::Commands;
 use SMTP::StatusCodes;
 use SMTP::Session;
 
-use constant NAME => 'Perl SMTPd RFC5321';
-
 my $MAX_CONNECTS = 100;
 
 $SIG{PIPE} = 'IGNORE';
@@ -51,16 +49,12 @@ sub new {
     $daemon or croak 'Unable to start daemon!';
 
     $self->{daemon} = $daemon;
-    $self->{connects} =
-        Coro::Semaphore->new($args{max_connects} || $MAX_CONNECTS);
-
-
-    $self->{process_message} = sub { croak 'PROCESS_MESSAGE NOT IMPLENETED' };
+    $self->{connects} = Coro::Semaphore->new($args{max_connects} || $MAX_CONNECTS);
 
     $self;
 }
 
-sub name { shift->{name} || NAME }
+sub name { shift->{name} || 'Perl SMTPd RFC5321' }
 
 sub address {
     my $self = shift;
@@ -75,6 +69,7 @@ sub address {
 
 sub logger {
     my ($self, $level, $str, @args) = @_;
+    chomp $str;
     my $msg = sprintf("%s: $str", uc($level), @args);
     use feature 'say';
     say $msg;
@@ -109,8 +104,26 @@ sub process_message {
 
 sub on {
     my ($self, $name, $cb) = @_;
-    my $class = ref $self;
-    #*{"${class}::$name"} = $cb;
+
+    if ($name && $cb) {
+        if (ref $cb ne 'CODE') {
+            carp "Failed to add callback `$name'. It's not a CODEREF";
+            return;
+        }
+
+        if ($self->{callback_list}{$name}) {
+            carp "`$name' has been redefined";
+        }
+
+        $self->{callback_list}{$name} = $cb;
+    }
+
+    my $default_cb = sub {
+        carp "UNDEFINED METHOD `$name' CALLED";
+        1;
+    };
+
+    $self->{callback_list}{$name} || $default_cb;
 }
 
 1;
